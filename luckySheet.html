@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3STONE / GOLDEN HAND Document Viewer</title>
+    <!--
+      SheetJS (xlsx) — parses .xlsx/.xls/.csv entirely client-side.
+
+      Why this replaces Office Online Viewer for spreadsheets:
+      index.php uses session_start() — every file is served through the
+      auth-gated api.php?action=serveFile, not a public static path.
+      Office Online Viewer fetches the file from Microsoft's own servers,
+      which never carry our session cookie, so it always failed with
+      "we can't confirm it's really you" for any logged-in-only file.
+      SheetJS instead has THIS PAGE (the user's own browser, which DOES
+      have the session cookie) fetch and parse the file directly — no
+      third party ever touches it, so auth/hosting/firewalls don't matter.
+    -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        .header {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+            gap: 12px;
+        }
+        .header h1 { font-size: 18px; font-weight: 500; white-space: nowrap; }
+        .header .file-name {
+            font-size: 14px;
+            color: #bdc3c7;
+            max-width: 400px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .header .actions {
+            display: flex;
+            gap: 10px;
+            flex-shrink: 0;
+        }
+        .header .actions button {
+            padding: 6px 14px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            background: #34495e;
+            color: white;
+            transition: background 0.2s;
+        }
+        .header .actions button:hover {
+            background: #4a6a8a;
+        }
+        .header .actions button.download-btn {
+            background: #27ae60;
+        }
+        .header .actions button.download-btn:hover {
+            background: #2ecc71;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            background: #ecf0f1;
+            padding: 20px;
+            overflow: hidden;
+        }
+        .loading {
+            text-align: center;
+            color: #7f8c8d;
+        }
+        .loading .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #bdc3c7;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 12px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        #sheet-container {
+            width: 100%;
+            height: 100%;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: none;
+            flex-direction: column;
+        }
+        #sheet-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+        .error {
+            text-align: center;
+            color: #e74c3c;
+            padding: 40px;
+        }
+        .error .icon { font-size: 48px; margin-bottom: 12px; }
+        .fallback-msg {
+            text-align: center;
+            padding: 30px;
+            color: #7f8c8d;
+        }
+        .fallback-msg .icon { font-size: 48px; margin-bottom: 12px; }
+        .fallback-msg a { color: #3498db; text-decoration: none; }
+        .fallback-msg a:hover { text-decoration: underline; }
+
+        /* ── Excel/CSV grid rendering (SheetJS output) ── */
+        .sheet-tabs {
+            display: flex;
+            gap: 2px;
+            background: #d5dbdb;
+            padding: 6px 6px 0 6px;
+            flex-shrink: 0;
+            overflow-x: auto;
+        }
+        .sheet-tab {
+            padding: 8px 16px;
+            font-size: 13px;
+            background: #ecf0f1;
+            color: #555;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            white-space: nowrap;
+            user-select: none;
+        }
+        .sheet-tab:hover { background: #fdfefe; }
+        .sheet-tab.active {
+            background: #ffffff;
+            color: #217346; /* Excel green */
+            font-weight: 600;
+        }
+        .grid-scroll {
+            flex: 1;
+            overflow: auto;
+            background: white;
+        }
+        table.excel-grid {
+            border-collapse: collapse;
+            font-size: 13px;
+            font-family: 'DM Mono', 'Courier New', monospace;
+        }
+        table.excel-grid td, table.excel-grid th {
+            border: 1px solid #e0e0e0;
+            padding: 4px 8px;
+            white-space: nowrap;
+            text-align: left;
+        }
+        table.excel-grid th {
+            background: #f1f3f4;
+            color: #555;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        table.excel-grid th.row-num {
+            position: sticky;
+            left: 0;
+            z-index: 3;
+            background: #f1f3f4;
+            text-align: center;
+            min-width: 40px;
+        }
+        table.excel-grid td.row-num {
+            position: sticky;
+            left: 0;
+            background: #f1f3f4;
+            color: #888;
+            text-align: center;
+            font-weight: 600;
+        }
+        .grid-truncated-notice {
+            padding: 10px 16px;
+            font-size: 12.5px;
+            color: #7f8c8d;
+            background: #fff8e1;
+            border-top: 1px solid #f0e0a0;
+            flex-shrink: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 GOLDEN HAND Document Viewer</h1>
+        <span class="file-name" id="file-name-display">Loading...</span>
+        <div class="actions">
+            <button onclick="downloadFile()" class="download-btn">⬇ Download</button>
+            <button onclick="window.close()">✕ Close</button>
+        </div>
+    </div>
+    <div class="container">
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading document...</p>
+        </div>
+        <div id="sheet-container"></div>
+    </div>
+
+    <script>
+        // Get file URL from query parameter
+        const urlParams = new URLSearchParams(window.location.search);
+        const fileUrl = urlParams.get('file');
+        const fileName = urlParams.get('name') || 'Spreadsheet';
+        // Explicit extension, passed by attachments.js from the file
+        // record's own `extension` field (f.extension) — reliable, unlike
+        // guessing from fileUrl, which is now an extension-less
+        // api.php?action=serveFile&id=... URL rather than a raw filename.
+        const fileExt = (urlParams.get('ext') || '').toLowerCase();
+
+        const SPREADSHEET_EXTS = ['xlsx', 'xls', 'xlsm', 'csv'];
+
+        document.getElementById('file-name-display').textContent = decodeURIComponent(fileName);
+
+        function downloadFile() {
+            if (fileUrl) {
+                window.open(fileUrl, '_blank');
+            }
+        }
+
+        function showLoaded() {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('sheet-container').style.display = 'flex';
+        }
+
+        function showFallback(container, message) {
+            container.innerHTML = `
+                <div class="fallback-msg">
+                    <div class="icon">📄</div>
+                    <p>${message}</p>
+                    <p><a href="${fileUrl}" target="_blank">Click here to open directly</a> or use the Download button.</p>
+                </div>
+            `;
+            showLoaded();
+        }
+
+        if (!fileUrl) {
+            document.getElementById('loading').innerHTML = `
+                <div class="error">
+                    <div class="icon">❌</div>
+                    <p>No file specified.</p>
+                </div>
+            `;
+        } else if (fileExt === 'pdf') {
+            // ── PDF: browser's own native reader ──
+            // Every modern browser (Chrome, Firefox, Edge, Safari) ships
+            // a built-in PDF viewer that renders a PDF URL directly in an
+            // iframe — full toolbar, zoom, search, print, no third party
+            // involved and no auth problem, since the iframe request goes
+            // out from the user's own browser with their session cookie
+            // intact. This deliberately does NOT go through Office Online
+            // Viewer, which would otherwise reintroduce the exact
+            // same-origin/auth problem SheetJS was brought in to avoid.
+            const container = document.getElementById('sheet-container');
+            const iframe = document.createElement('iframe');
+            iframe.allow = 'fullscreen';
+            iframe.src = fileUrl;
+            container.appendChild(iframe);
+            showLoaded();
+            // No onerror/timeout fallback needed here: a native PDF
+            // <iframe> either renders the PDF or triggers the browser's
+            // own download prompt for a malformed file — there's no
+            // "stuck loading" failure mode the way there is with the
+            // external Office Online Viewer below.
+        } else if (SPREADSHEET_EXTS.includes(fileExt)) {
+            // ── Excel / CSV: parsed and rendered entirely client-side ──
+            loadSpreadsheet();
+        } else {
+            // ── Word / PowerPoint / everything else ──
+            // No equally clean client-side renderer exists for these yet
+            // (a future upgrade could use mammoth.js for .docx specifically),
+            // so this still routes through Office Online Viewer. Same
+            // auth caveat as before applies here: this will only work if
+            // api.php?action=serveFile is reachable WITHOUT a session,
+            // which conflicts with keeping attachments access-controlled.
+            // Left as-is because today's fix was scoped to Excel + PDF.
+            loadViaOfficeOnline();
+        }
+
+        function loadViaOfficeOnline() {
+            const container = document.getElementById('sheet-container');
+            const iframe = document.createElement('iframe');
+            iframe.allow = 'fullscreen';
+            const encodedFileUrl = encodeURIComponent(fileUrl);
+            iframe.src = `https://view.officeapps.live.com/op/view.aspx?src=${encodedFileUrl}`;
+            container.appendChild(iframe);
+            showLoaded();
+
+            iframe.onerror = function () {
+                showFallback(container, 'Unable to preview this file in the browser.');
+            };
+
+            setTimeout(function () {
+                const iframeContent = iframe.contentDocument || iframe.contentWindow?.document;
+                if (iframeContent && iframeContent.body && iframeContent.body.innerHTML === '') {
+                    showFallback(container, 'Preview is taking too long to load.');
+                }
+            }, 10000);
+        }
+
+        // Very large sheets are capped so the browser tab doesn't hang
+        // building a huge DOM table — download is always offered as the
+        // way to see the full file beyond this cap.
+        const MAX_ROWS = 2000;
+        const MAX_COLS = 100;
+
+        async function loadSpreadsheet() {
+            const container = document.getElementById('sheet-container');
+            try {
+                if (typeof XLSX === 'undefined') {
+                    throw new Error('Spreadsheet library failed to load (check your internet connection).');
+                }
+
+                // credentials:'include' is the whole point — this sends
+                // the browser's own session cookie, which is exactly what
+                // Office Online Viewer could never do from Microsoft's
+                // servers. Same-origin api.php?action=serveFile URL, so
+                // this is a normal authenticated fetch, nothing special.
+                const res = await fetch(fileUrl, { credentials: 'include' });
+                if (!res.ok) {
+                    throw new Error(`Server returned ${res.status} while fetching the file.`);
+                }
+                const buf = await res.arrayBuffer();
+                const workbook = XLSX.read(buf, { type: 'array', cellDates: true });
+
+                if (!workbook.SheetNames.length) {
+                    throw new Error('This file has no sheets to display.');
+                }
+
+                renderWorkbook(container, workbook);
+                showLoaded();
+            } catch (err) {
+                console.error(err);
+                showFallback(container, `Couldn't preview this spreadsheet (${err.message}).`);
+            }
+        }
+
+        function renderWorkbook(container, workbook) {
+            container.innerHTML = '';
+
+            // Tab bar (only shown when there's more than one sheet).
+            let tabsEl = null;
+            if (workbook.SheetNames.length > 1) {
+                tabsEl = document.createElement('div');
+                tabsEl.className = 'sheet-tabs';
+                workbook.SheetNames.forEach((name, i) => {
+                    const tab = document.createElement('div');
+                    tab.className = 'sheet-tab' + (i === 0 ? ' active' : '');
+                    tab.textContent = name;
+                    tab.onclick = () => {
+                        tabsEl.querySelectorAll('.sheet-tab').forEach(t => t.classList.remove('active'));
+                        tab.classList.add('active');
+                        renderSheet(workbook, name);
+                    };
+                    tabsEl.appendChild(tab);
+                });
+                container.appendChild(tabsEl);
+            }
+
+            const scrollEl = document.createElement('div');
+            scrollEl.className = 'grid-scroll';
+            scrollEl.id = 'grid-scroll';
+            container.appendChild(scrollEl);
+
+            renderSheet(workbook, workbook.SheetNames[0]);
+        }
+
+        function renderSheet(workbook, sheetName) {
+            const scrollEl = document.getElementById('grid-scroll');
+            const sheet = workbook.Sheets[sheetName];
+
+            // header:1 => array-of-arrays, so we render EXACTLY what's in
+            // the sheet (including a real header row if the file has one)
+            // rather than SheetJS guessing which row is headers.
+            const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+            const truncatedRows = rows.length > MAX_ROWS;
+            const visibleRows = rows.slice(0, MAX_ROWS);
+            const colCount = Math.min(
+                visibleRows.reduce((max, r) => Math.max(max, r.length), 0),
+                MAX_COLS
+            );
+
+            const table = document.createElement('table');
+            table.className = 'excel-grid';
+
+            // Spreadsheet-style column letters (A, B, C, ... AA, AB, ...)
+            // as a header row, plus a sticky row-number column, so it
+            // reads like an actual spreadsheet grid rather than a plain
+            // HTML table.
+            const thead = document.createElement('thead');
+            const headRow = document.createElement('tr');
+            headRow.appendChild(document.createElement('th')).className = 'row-num';
+            for (let c = 0; c < colCount; c++) {
+                const th = document.createElement('th');
+                th.textContent = colLetter(c);
+                headRow.appendChild(th);
+            }
+            thead.appendChild(headRow);
+            table.appendChild(thead);
+
+            const tbody = document.createElement('tbody');
+            visibleRows.forEach((row, rIdx) => {
+                const tr = document.createElement('tr');
+                const rowNumTd = document.createElement('td');
+                rowNumTd.className = 'row-num';
+                rowNumTd.textContent = rIdx + 1;
+                tr.appendChild(rowNumTd);
+                for (let c = 0; c < colCount; c++) {
+                    const td = document.createElement('td');
+                    const val = row[c];
+                    td.textContent = (val === undefined || val === null) ? '' : val;
+                    tr.appendChild(td);
+                }
+                tbody.appendChild(tr);
+            });
+            table.appendChild(tbody);
+
+            scrollEl.innerHTML = '';
+            scrollEl.appendChild(table);
+
+            const existingNotice = document.querySelector('.grid-truncated-notice');
+            if (existingNotice) existingNotice.remove();
+            if (truncatedRows) {
+                const notice = document.createElement('div');
+                notice.className = 'grid-truncated-notice';
+                notice.textContent = `Showing the first ${MAX_ROWS.toLocaleString()} of ${rows.length.toLocaleString()} rows — download the file to see the rest.`;
+                scrollEl.parentElement.appendChild(notice);
+            }
+        }
+
+        function colLetter(index) {
+            let letter = '';
+            let n = index;
+            while (n >= 0) {
+                letter = String.fromCharCode((n % 26) + 65) + letter;
+                n = Math.floor(n / 26) - 1;
+            }
+            return letter;
+        }
+    </script>
+</body>
+</html>

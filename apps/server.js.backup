@@ -1,0 +1,72 @@
+const express = require("express");
+const { createServer } = require("http");
+const { Server } = require("socket.io");
+
+const app = express();
+const httpServer = createServer(app);
+
+// ── Secret for authenticating PHP → Node requests ──
+// Must match SOCKET_SHARED_SECRET in socket_notifier.php
+const SHARED_SECRET = "asdqwe";  // 🔐 Change this to a strong secret
+
+// ── Middleware to parse JSON bodies ──
+app.use(express.json());
+
+// ── Socket.IO with CORS ──
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",           // Allows Apache on XAMPP (port 80) to connect
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// ── Handle HTTP POST from PHP (socket_notifier.php) ──
+app.post("/update", (req, res) => {
+  // Verify secret
+  const secret = req.headers["x-socket-secret"];
+  if (secret !== SHARED_SECRET) {
+    console.warn(`Unauthorized /update attempt from ${req.ip}`);
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  const { event, data } = req.body;
+  if (!event) {
+    return res.status(400).json({ error: "Missing event" });
+  }
+
+  // Broadcast to all connected clients
+  io.emit(event, data);
+  console.log(`Broadcasted "${event}" to ${io.engine.clientsCount} clients`);
+
+  res.json({ ok: true });
+});
+
+// ── Socket.IO connection logging ──
+io.engine.on("connection_error", (err) => {
+  console.log("Req URL:", err.req?.url);
+  console.log("Error Code:", err.code);
+  console.log("Error Message:", err.message);
+});
+
+io.on("connection", (socket) => {
+  console.log("Client connected! ID:", socket.id);
+
+  // Optional: handle disconnection
+  socket.on("disconnect", () => {
+    console.log("Client disconnected:", socket.id);
+  });
+});
+
+// ── Start server ──
+const PORT = process.env.PORT || 3000;
+
+httpServer.listen(PORT, "127.0.0.1", () => {
+  console.log(`✅ Socket server running on http://127.0.0.1:${PORT}`);
+});
+
+
+
+httpServer.listen(PORT, '127.0.0.1', () => {
+  console.log(`✅ Socket server running on http://localhost:${PORT}`);
+});

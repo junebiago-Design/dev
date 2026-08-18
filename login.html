@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.5, user-scalable=yes" />
+    <title>Sign In | TMS V1.0</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+        :root {
+            --bg: #0f1117;
+            --bg2: #161b27;
+            --bg3: #1e2535;
+            --border: #2a3347;
+            --text: #e8eaf0;
+            --text2: #8b93a8;
+            --text3: #5a6378;
+            --accent: #4f8ef7;
+            --accent2: #3d75d4;
+            --accent-glow: rgba(79, 142, 247, 0.18);
+            --red: #f56565;
+            --radius: 10px;
+            --transition: 0.2s cubic-bezier(.4, 0, .2, 1);
+            --brand-yellow: #f5c842;
+            --brand-glow: rgba(245, 200, 66, 0.22);
+        }
+
+        body.light-theme {
+            --bg: #f4f5f9;
+            --bg2: #ffffff;
+            --bg3: #eef0f6;
+            --border: #dde1ea;
+            --text: #1a1d29;
+            --text2: #5b6376;
+            --text3: #8b93a8;
+            --accent: #3d75d4;
+            --accent2: #2f5fb0;
+            --accent-glow: rgba(61, 117, 212, 0.12);
+        }
+
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        html { font-size: 15px; }
+        body {
+            font-family: 'Sora', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            transition: background var(--transition), color var(--transition);
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-family: inherit;
+            font-size: 0.825rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition);
+            white-space: nowrap;
+        }
+        .btn-primary {
+            background: var(--accent);
+            color: #fff;
+        }
+        .btn-primary:hover {
+            background: var(--accent2);
+            box-shadow: 0 0 16px var(--accent-glow);
+        }
+
+        input[type="text"],
+        input[type="password"] {
+            background: var(--bg3);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text);
+            font-family: inherit;
+            font-size: 0.85rem;
+            padding: 8px 12px;
+            transition: border var(--transition);
+            width: 100%;
+        }
+        input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .logo-icon {
+            width: 34px;
+            height: 34px;
+            background: var(--brand-yellow);
+            color: #1a1d29;
+            border-radius: 9px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 0 16px var(--brand-glow);
+        }
+
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: radial-gradient(circle at 20% 20%, var(--accent-glow), transparent 55%), var(--bg);
+        }
+        .login-card {
+            width: 100%;
+            max-width: 380px;
+            background: var(--bg2);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 36px 32px 28px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 28px;
+        }
+        .login-header .logo-icon {
+            margin: 0 auto 14px;
+        }
+        .login-header h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .login-header p {
+            font-size: 0.8rem;
+            color: var(--text3);
+            margin-top: 4px;
+        }
+
+        #login-form .form-group {
+            margin-bottom: 18px;
+        }
+        #login-form label {
+            display: block;
+            font-size: 0.775rem;
+            font-weight: 600;
+            color: var(--text3);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 6px;
+        }
+        .input-group {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .input-group .input-icon {
+            position: absolute;
+            left: 11px;
+            font-size: 0.85rem;
+            color: var(--text3);
+            pointer-events: none;
+        }
+        .input-group input {
+            padding-left: 34px;
+        }
+        .input-group .toggle-password {
+            position: absolute;
+            right: 6px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text3);
+            padding: 6px;
+            border-radius: 6px;
+            line-height: 1;
+        }
+        .input-group .toggle-password:hover {
+            color: var(--text2);
+            background: var(--bg3);
+        }
+
+        .form-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: -6px 0 22px;
+            font-size: 0.8rem;
+        }
+        .remember-me {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text2);
+            cursor: pointer;
+        }
+        .remember-me input {
+            width: auto;
+        }
+        .forgot-password {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .forgot-password:hover {
+            text-decoration: underline;
+        }
+
+        .login-btn {
+            width: 100%;
+            justify-content: center;
+            padding: 11px;
+            font-size: 0.9rem;
+            position: relative;
+        }
+
+        .login-error {
+            margin-top: 14px;
+            padding: 10px 12px;
+            background: rgba(245, 101, 101, 0.1);
+            border: 1px solid rgba(245, 101, 101, 0.25);
+            color: var(--red);
+            font-size: 0.8rem;
+            border-radius: 8px;
+            text-align: center;
+            display: none;
+        }
+        .login-error.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // Apply saved theme before paint
+        try { if (localStorage.getItem('tms_theme') === 'light') document.body.classList.add('light-theme'); } catch {}
+    </script>
+
+    <div id="login-page" class="login-container">
+        <div class="login-card">
+            <div class="login-header">
+                <div class="logo-icon">⬡</div>
+                <h1>TMS</h1>
+                <p>Task Management System</p>
+            </div>
+
+            <!-- ✅ Form submits to auth.php via normal POST – NO ApiClient -->
+            <form id="login-form" method="POST" action="auth.php?action=login">
+                <div class="form-group">
+                    <label>Username</label>
+                    <div class="input-group">
+                        <span class="input-icon">👤</span>
+                        <input type="text" id="login-username" name="username" placeholder="Enter username" required autofocus>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Password</label>
+                    <div class="input-group">
+                        <span class="input-icon">🔒</span>
+                        <input type="password" id="login-password" name="password" placeholder="Enter password" required>
+                        <button type="button" class="toggle-password" onclick="togglePasswordVisibility()">👁</button>
+                    </div>
+                </div>
+
+                <div class="form-options">
+                    <label class="remember-me">
+                        <input type="checkbox" id="remember-me" name="remember" checked>
+                        Remember me
+                    </label>
+                    <a href="#" class="forgot-password">Forgot password?</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary login-btn" id="login-submit">
+                    <span id="login-btn-text">Sign In</span>
+                    <span id="login-loader" style="display:none;">⏳</span>
+                </button>
+
+                <div id="login-error" class="login-error"></div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function togglePasswordVisibility() {
+            const input = document.getElementById('login-password');
+            input.type = input.type === 'password' ? 'text' : 'password';
+        }
+
+        // ── Show error if present in URL (sent by auth.php) ──
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorMsg = urlParams.get('error');
+        if (errorMsg) {
+            const errorBox = document.getElementById('login-error');
+            errorBox.textContent = decodeURIComponent(errorMsg);
+            errorBox.classList.add('show');
+            // Remove error param from URL without reloading
+            const newUrl = window.location.pathname + window.location.search.replace(/[?&]error=[^&]*/, '').replace(/^&/, '?');
+            if (newUrl !== window.location.pathname) {
+                window.history.replaceState({}, document.title, newUrl);
+            }
+            // Reset button state if it was stuck
+            document.getElementById('login-btn-text').style.display = 'inline';
+            document.getElementById('login-loader').style.display = 'none';
+            document.getElementById('login-submit').disabled = false;
+        }
+
+        // ── Show loading state on form submit ──
+        document.getElementById('login-form').addEventListener('submit', function() {
+            const btnText = document.getElementById('login-btn-text');
+            const loader = document.getElementById('login-loader');
+            const submitBtn = document.getElementById('login-submit');
+            const errorBox = document.getElementById('login-error');
+
+            errorBox.classList.remove('show');
+            errorBox.textContent = '';
+            btnText.style.display = 'none';
+            loader.style.display = 'inline';
+            submitBtn.disabled = true;
+            // The form will now submit normally to auth.php
+        });
+
+        // ── If already logged in, redirect to dashboard ──
+        fetch('auth.php?action=check')
+            .then(res => res.json())
+            .then(data => {
+                if (data.loggedIn) {
+		window.location.replace('index.php'); // or index.html if you keep that
+                }
+            })
+            .catch(() => {});
+
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const url = new URL(window.location.href);
+
+    if (url.searchParams.has('error')) {
+        url.searchParams.delete('error');
+
+        window.history.replaceState(
+            {},
+            document.title,
+            url.pathname
+        );
+    }
+});
+
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});
+</script>
+
+</body>
+</html>
